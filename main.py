@@ -1,0 +1,129 @@
+import discord
+from discord.ext import commands
+from discord_slash import SlashCommand, SlashContext
+from discord_slash.utils import manage_commands
+
+import logging, os
+
+# logging
+logging.basicConfig(level=logging.INFO)
+
+handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
+handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
+
+logger = logging.getLogger('discord')
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
+
+logger1 = logging.getLogger()
+logger1.setLevel(logging.INFO)
+logger1.addHandler(handler)
+
+# intents
+intents = discord.Intents.all()
+intents.presences = False
+
+
+help_command = commands.DefaultHelpCommand(
+    no_category = 'Other'
+)
+
+bot = commands.Bot(
+    activity = discord.Activity(type=discord.ActivityType.listening, name='slash commands'),
+    command_prefix = commands.when_mentioned_or('.'),
+    help_command = help_command,
+    intents=intents,
+)
+TOKEN = open('TOKEN.txt', 'r').read()
+slash = SlashCommand(bot, sync_commands=True, sync_on_cog_reload=True)
+guild_ids = [702716876601688114]
+
+
+@bot.event
+async def on_ready():
+    logging.info(f"We have logged in as {bot.user}")
+
+# cogs
+@slash.subcommand(
+    base = "cogs",
+    name = "list",
+    description = "Lists the bot's cogs.",
+    guild_ids = guild_ids,
+)
+@commands.is_owner()
+async def list(ctx: SlashContext):
+    # loaded cogs
+    content = "Loaded cogs: "
+    for e in bot.extensions.keys():
+        content += str(e)[5:] + ", "
+    content = content[:-2] + "."
+
+    # all cogs
+    content += "\nAll cogs: "
+    for f in os.listdir("./cogs"):
+        if f == "__pycache__":
+            continue
+        content += f[:-3] + ", "
+    content = content[:-2] + "."
+
+    await ctx.send(content=content)
+
+@slash.subcommand(
+    base = "cogs",
+    name = "reload",
+    description = "Reload a cog.",
+    options = [manage_commands.create_option(
+        name = "cog",
+        description = "A cog to reload.",
+        option_type = 3,
+        required = True,
+    )],
+    guild_ids = guild_ids,
+)
+@commands.is_owner()
+async def reload(ctx: SlashContext, cog: str):
+    bot.reload_extension(f"cogs.{cog}")
+    await ctx.send(f"Successfully reloaded {cog}.")
+
+@slash.subcommand(
+    base = "cogs",
+    name = "load",
+    description = "Load a cog.",
+    options = [manage_commands.create_option(
+        name = "cog",
+        description = "A cog to load.",
+        option_type = 3,
+        required = True,
+    )],
+    guild_ids = guild_ids,
+)
+@commands.is_owner()
+async def reload(ctx: SlashContext, cog: str):
+    bot.load_extension(f"cogs.{cog}")
+    await slash.sync_all_commands()
+    await ctx.send(f"Successfully loaded {cog}.")
+
+@slash.subcommand(
+    base = "cogs",
+    name = "unload",
+    description = "Unload a cog.",
+    options = [manage_commands.create_option(
+        name = "cog",
+        description = "A cog to unload.",
+        option_type = 3,
+        required = True,
+    )],
+    guild_ids = guild_ids,
+)
+@commands.is_owner()
+async def reload(ctx: SlashContext, cog: str):
+    bot.unload_extension(f"cogs.{cog}")
+    await slash.sync_all_commands()
+    await ctx.send(f"Successfully unloaded {cog}.")
+
+# load cogs
+for file in os.listdir('./cogs'):
+    if file.endswith('.py') and not file.startswith('_'):
+        bot.load_extension(f'cogs.{file[:-3]}')
+
+bot.run(TOKEN)

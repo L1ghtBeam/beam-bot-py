@@ -1,0 +1,4 @@
+*.log
+TOKEN.txt
+PG_PASS.txt
+*.pyc
