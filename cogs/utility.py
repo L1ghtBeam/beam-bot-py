@@ -6,8 +6,6 @@ from discord_slash.utils import manage_commands
 
 import pytz
 
-guild_ids = [702716876601688114]
-
 
 class Utility(commands.Cog):
 

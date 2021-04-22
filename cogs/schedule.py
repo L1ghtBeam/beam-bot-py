@@ -5,7 +5,7 @@ from discord_slash.utils import manage_commands
 
 import pytz, logging
 
-guild_ids = [702716876601688114]
+guild_ids = [834890280959475712]
 
 
 class Schedule(commands.Cog):

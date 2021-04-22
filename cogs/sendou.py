@@ -5,8 +5,6 @@ from discord_slash.utils import manage_commands
 
 import requests, json, logging, asyncio
 
-guild_ids = [702716876601688114]
-
 with open("data/abilities.json", 'r') as f:
     data = f.read()
 abilitiesDict = json.loads(data)

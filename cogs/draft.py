@@ -6,8 +6,6 @@ from discord_slash.utils import manage_commands
 import asyncio, logging, random, datetime, pytz, math
 import time as t
 
-guild_ids = [702716876601688114]
-
 
 class Draft(commands.Cog):
 
