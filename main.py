@@ -3,7 +3,18 @@ from discord.ext import commands
 from discord_slash import SlashCommand, SlashContext
 from discord_slash.utils import manage_commands
 
-import logging, os
+import logging, os, asyncpg
+
+
+DB_ADDRESS = '192.168.0.22'
+DB_PORT = '5432'
+DB_NAME = 'Beam Bot'
+
+TOKEN = open('TOKEN.txt', 'r').read()
+PG_PASS = open('PG_PASS.txt', 'r').read()
+
+guild_ids = [702716876601688114]
+
 
 # logging
 logging.basicConfig(level=logging.INFO)
@@ -34,10 +45,10 @@ bot = commands.Bot(
     help_command = help_command,
     intents=intents,
 )
-TOKEN = open('TOKEN.txt', 'r').read()
 slash = SlashCommand(bot, sync_commands=True, sync_on_cog_reload=True)
-guild_ids = [702716876601688114]
 
+async def create_db_pool():
+    bot.pg_con = await asyncpg.create_pool(host=DB_ADDRESS, port=DB_PORT, database=DB_NAME, user='postgres', password=PG_PASS)
 
 @bot.event
 async def on_ready():
@@ -126,4 +137,5 @@ for file in os.listdir('./cogs'):
     if file.endswith('.py') and not file.startswith('_'):
         bot.load_extension(f'cogs.{file[:-3]}')
 
+bot.loop.run_until_complete(create_db_pool())
 bot.run(TOKEN)
