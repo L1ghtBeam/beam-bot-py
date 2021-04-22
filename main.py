@@ -6,12 +6,12 @@ from discord_slash.utils import manage_commands
 import logging, os, asyncpg
 
 
-DB_ADDRESS = '192.168.0.22'
 DB_PORT = '5432'
 DB_NAME = 'Beam Bot'
 
 TOKEN = open('TOKEN.txt', 'r').read()
 PG_PASS = open('PG_PASS.txt', 'r').read()
+DB_ADDRESS = open('DB_ADDRESS.txt', 'r').read()
 
 guild_ids = [702716876601688114]
 

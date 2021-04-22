@@ -1,4 +1,5 @@
 *.log
+*.pyc
 TOKEN.txt
 PG_PASS.txt
-*.pyc
+DB_ADDRESS.txt
