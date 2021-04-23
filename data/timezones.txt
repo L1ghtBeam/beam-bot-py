@@ -1,3 +1,10 @@
+US/Pacific
+US/Mountain
+US/Central
+US/Eastern
+US/Arizona
+US/Hawaii
+US/Alaska
 Africa/Abidjan
 Africa/Accra
 Africa/Addis_Ababa
@@ -429,11 +436,4 @@ Pacific/Tarawa
 Pacific/Tongatapu
 Pacific/Wake
 Pacific/Wallis
-US/Alaska
-US/Arizona
-US/Central
-US/Eastern
-US/Hawaii
-US/Mountain
-US/Pacific
 UTC
