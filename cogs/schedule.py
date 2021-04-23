@@ -1,5 +1,4 @@
 import discord
-from discord import colour
 from discord.ext import commands
 from discord_slash import cog_ext, SlashContext
 from discord_slash.utils import manage_commands
@@ -39,6 +38,27 @@ class Schedule(commands.Cog):
         tz = pytz.timezone(guild['timezone'])
         t = datetime.now(tz)
 
+        # event functionality
+        events = await db.fetch("SELECT * FROM events WHERE guild_id = $1 ORDER BY timestamp DESC", guild_id)
+
+        # sort events
+        sorted_events = [[], [], [], [], [], []]
+        for event in events:
+            days = (event['timestamp'] - t).days
+
+            # keep inside array
+            days = max(0, days)
+            days = min(5, days)
+
+            sorted_events[days].append(event)
+
+        def format_events(events, format):
+            value = ""
+            for event in events:
+                value += "{} - {}\n".format(event['timestamp'].strftime(format), event['name'])
+            value = value[:-1] if value else "Nothing"
+            return value
+
         embed = discord.Embed(
             colour=discord.Colour.blue(),
             timestamp=datetime.now(pytz.utc),
@@ -47,13 +67,16 @@ class Schedule(commands.Cog):
 
         embed.set_author(name=channel.guild.name, icon_url=channel.guild.icon_url)
 
-        # TODO: add event functionality
-        embed.add_field(name="Today:", value="Nothing", inline=False)
-        embed.add_field(name="Tomorrow:", value="Nothing", inline=False)
-        embed.add_field(name=(t+relativedelta(days=+2)).strftime('%A') + ":", value="Nothing", inline=False)
-        embed.add_field(name=(t+relativedelta(days=+3)).strftime('%A') + ":", value="Nothing", inline=False)
-        embed.add_field(name=(t+relativedelta(days=+4)).strftime('%A') + ":", value="Nothing", inline=False)
+        embed.add_field(name="Today:", value=format_events(sorted_events[0], "%I:%M %p"), inline=False)
+        embed.add_field(name="Tomorrow:", value=format_events(sorted_events[1], "%I:%M %p"), inline=False)
+        embed.add_field(name=(t+relativedelta(days=+2)).strftime('%A') + ":", value=format_events(sorted_events[2], "%I:%M %p"), inline=False)
+        embed.add_field(name=(t+relativedelta(days=+3)).strftime('%A') + ":", value=format_events(sorted_events[3], "%I:%M %p"), inline=False)
+        embed.add_field(name=(t+relativedelta(days=+4)).strftime('%A') + ":", value=format_events(sorted_events[4], "%I:%M %p"), inline=False)
 
+        if sorted_events[5]:
+            embed.add_field(name="Future:", value=format_events(sorted_events[5], "%m/%d"), inline=False)
+        
+        embed.set_footer(text=guild['timezone'])
         await message.edit(content=None, embed=embed)
 
     @cog_ext.cog_subcommand(
@@ -112,10 +135,11 @@ class Schedule(commands.Cog):
         await ctx.send("Setup complete!")
         await self.update_schedule(guild_id)
 
+    # function for testing purposes
     @cog_ext.cog_subcommand(
         base="schedule",
         name="update",
-        guild_ids=guild_ids,
+        guild_ids=guild_ids, # dont remove
     )
     @commands.guild_only()
     async def update(self, ctx: SlashContext):
