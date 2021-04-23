@@ -1,9 +1,12 @@
 import discord
+from discord import colour
 from discord.ext import commands
 from discord_slash import cog_ext, SlashContext
 from discord_slash.utils import manage_commands
 
 import pytz, logging
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 guild_ids = [834890280959475712]
 
@@ -14,6 +17,44 @@ class Schedule(commands.Cog):
 
     async def update_schedule(self, guild_id: str):
         logging.info("Updating guild: {}".format(guild_id))
+        db = self.bot.pg_con
+
+        guild = await db.fetchrow("SELECT * FROM guilds WHERE guild_id = $1", guild_id)
+        if not guild:
+            # guild not found in database
+            return
+        
+        channel = discord.utils.get(self.bot.get_all_channels(), id=int(guild['schedule_channel_id']), guild__id=int(guild_id))
+        if not channel:
+            # channel not found
+            return
+        if not channel.permissions_for(channel.guild.me).send_messages:
+            # invalid permissions - can't send messages in channel
+            return
+
+        message = discord.utils.get(await channel.history(limit=1).flatten(), author=channel.guild.me)
+        if not message:
+            message = await channel.send("Generating schedule...")
+        
+        tz = pytz.timezone(guild['timezone'])
+        t = datetime.now(tz)
+
+        embed = discord.Embed(
+            colour=discord.Colour.blue(),
+            timestamp=datetime.now(pytz.utc),
+            title="Schedule for {}".format(t.strftime('%A, %B %d, %Y')),
+        )
+
+        embed.set_author(name=channel.guild.name, icon_url=channel.guild.icon_url)
+
+        # TODO: add event functionality
+        embed.add_field(name="Today:", value="Nothing", inline=False)
+        embed.add_field(name="Tomorrow:", value="Nothing", inline=False)
+        embed.add_field(name=(t+relativedelta(days=+2)).strftime('%A') + ":", value="Nothing", inline=False)
+        embed.add_field(name=(t+relativedelta(days=+3)).strftime('%A') + ":", value="Nothing", inline=False)
+        embed.add_field(name=(t+relativedelta(days=+4)).strftime('%A') + ":", value="Nothing", inline=False)
+
+        await message.edit(content=None, embed=embed)
 
     @cog_ext.cog_subcommand(
         base="schedule",
@@ -43,8 +84,8 @@ class Schedule(commands.Cog):
     )
     @commands.guild_only()
     async def setup(self, ctx: SlashContext, channel: discord.TextChannel, timezone: str, role: discord.Role = None):
-        db = self.bot.pg_con
         guild_id = str(ctx.guild_id)
+        db = self.bot.pg_con
 
         if await db.fetch("SELECT guild_id FROM guilds WHERE guild_id = $1", guild_id):
             await ctx.send("Schedule is already set up for this server!", hidden=True)
@@ -54,6 +95,10 @@ class Schedule(commands.Cog):
             await ctx.send("Invalid timezone! Please refer to /timezones for a list of valid timezones.", hidden=True)
             return
 
+        if not channel.permissions_for(channel.guild.me).send_messages:
+            await ctx.send("Invalid permissions! Cannot send messages in {}.".format(channel.mention), hidden=True)
+            return
+        
         channel_id = str(channel.id)
         if role:
             role_id = str(role.id)
@@ -66,6 +111,16 @@ class Schedule(commands.Cog):
         )
         await ctx.send("Setup complete!")
         await self.update_schedule(guild_id)
+
+    @cog_ext.cog_subcommand(
+        base="schedule",
+        name="update",
+        guild_ids=guild_ids,
+    )
+    @commands.guild_only()
+    async def update(self, ctx: SlashContext):
+        await self.update_schedule(str(ctx.guild_id))
+        await ctx.send("Updated schedule!", hidden=True)
 
 
 def setup(bot):

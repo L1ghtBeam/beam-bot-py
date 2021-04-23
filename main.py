@@ -13,7 +13,7 @@ TOKEN = open('TOKEN.txt', 'r').read()
 PG_PASS = open('PG_PASS.txt', 'r').read()
 DB_ADDRESS = open('DB_ADDRESS.txt', 'r').read()
 
-guild_ids = [702716876601688114]
+guild_ids = [702716876601688114, 834890280959475712]
 
 
 # logging
