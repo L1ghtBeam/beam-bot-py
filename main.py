@@ -77,7 +77,7 @@ async def list(ctx: SlashContext):
         content += f[:-3] + ", "
     content = content[:-2] + "."
 
-    await ctx.send(content=content)
+    await ctx.send(content=content, hidden=True)
 
 @slash.subcommand(
     base = "cogs",
@@ -94,7 +94,7 @@ async def list(ctx: SlashContext):
 @commands.is_owner()
 async def reload(ctx: SlashContext, cog: str):
     bot.reload_extension(f"cogs.{cog}")
-    await ctx.send(f"Successfully reloaded {cog}.")
+    await ctx.send(f"Successfully reloaded {cog}.", hidden=True)
 
 @slash.subcommand(
     base = "cogs",
@@ -112,7 +112,7 @@ async def reload(ctx: SlashContext, cog: str):
 async def reload(ctx: SlashContext, cog: str):
     bot.load_extension(f"cogs.{cog}")
     await slash.sync_all_commands()
-    await ctx.send(f"Successfully loaded {cog}.")
+    await ctx.send(f"Successfully loaded {cog}.", hidden=True)
 
 @slash.subcommand(
     base = "cogs",
@@ -130,7 +130,7 @@ async def reload(ctx: SlashContext, cog: str):
 async def reload(ctx: SlashContext, cog: str):
     bot.unload_extension(f"cogs.{cog}")
     await slash.sync_all_commands()
-    await ctx.send(f"Successfully unloaded {cog}.")
+    await ctx.send(f"Successfully unloaded {cog}.", hidden=True)
 
 # load cogs
 for file in os.listdir('./cogs'):
