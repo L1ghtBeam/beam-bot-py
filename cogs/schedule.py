@@ -14,41 +14,42 @@ class Schedule(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    def can_edit_schedule():
-        async def predicate(ctx):
-            if not ctx.guild:
-                # not in a guild
-                return False
+    async def fetch_schedule(self, ctx: SlashContext):
+        if not ctx.guild:
+            # not in a guild
+            return None
+        
+        guild_id = str(ctx.guild.id)
+        guild = await self.bot.pg_con.fetchrow("SELECT * FROM guilds WHERE guild_id = $1", guild_id)
+        if not guild:
+            # schedule is not setup
+            return None
 
-            guild_id = str(ctx.guild.id)
-            guild = await ctx.bot.pg_con.fetchrow("SELECT guild_id, schedule_channel_id, schedule_role_id FROM guilds WHERE guild_id = $1", guild_id)
-            if not guild:
-                # schedule does not exist
-                return False
+        return guild
 
-            if ctx.guild.owner_id == ctx.author.id:
-                # is owner
-                return True
-
-            channel = discord.utils.get(ctx.bot.get_all_channels(), id=int(guild['schedule_channel_id']), guild__id=int(guild_id))
-            if not channel:
-                # schedule channel not found
-                return False
-            
-            if channel.permissions_for(ctx.author).administrator:
-                # is administrator
-                return True
-
-            if not channel.permissions_for(ctx.author).view_channel:
-                # cannot view channel
-                return False
-            
-            if guild['schedule_role_id']:
-                if not discord.utils.get(ctx.author.roles, id=int(guild['schedule_role_id'])):
-                    # don't have required role
-                    return False
+    async def can_edit_schedule(self, ctx: SlashContext, guild):
+        if ctx.guild.owner_id == ctx.author.id:
+            # is owner
             return True
-        return commands.check(predicate)
+
+        channel = discord.utils.get(self.bot.get_all_channels(), id=int(guild['schedule_channel_id']), guild__id=int(guild['guild_id']))
+        if not channel:
+            # schedule channel not found
+            return False
+        
+        if channel.permissions_for(ctx.author).administrator:
+            # is administrator
+            return True
+
+        if not channel.permissions_for(ctx.author).view_channel:
+            # cannot view channel
+            return False
+        
+        if guild['schedule_role_id']:
+            if not discord.utils.get(ctx.author.roles, id=int(guild['schedule_role_id'])):
+                # don't have required role
+                return False
+        return True
 
     async def update_schedule(self, guild_id: str):
         db = self.bot.pg_con
@@ -81,8 +82,10 @@ class Schedule(commands.Cog):
         for event in events:
             days = (event['timestamp'].astimezone(tz).date() - now.date()).days
 
+            if days < 0:
+                continue
+
             # keep inside array
-            days = max(0, days)
             days = min(5, days)
 
             sorted_events[days].append(event)
@@ -238,9 +241,16 @@ class Schedule(commands.Cog):
         ],
         guild_ids=guild_ids, # TODO: remove on main
     )
-    @can_edit_schedule()
     async def event_add(self, ctx:SlashContext, name:str, month:int, day:int, hour:int, minute:int, period:str, description:str = "", timezone:str=""):
-        guild_id = str(ctx.guild_id)
+        guild = await self.fetch_schedule(ctx)
+        if not guild:
+            await ctx.send("Schedule not found!", hidden=True)
+            return
+
+        if not await self.can_edit_schedule(ctx, guild):
+            await ctx.send("You do not have permission to manage this schedule!", hidden=True)
+            return
+
         db = self.bot.pg_con
         PM = period == "PM"
 
@@ -257,8 +267,7 @@ class Schedule(commands.Cog):
                 await ctx.send("Invalid timezone!", hidden=True)
                 return
         else:
-            timezone = await db.fetchrow("SELECT guild_id, timezone FROM guilds WHERE guild_id = $1", guild_id)
-            timezone = timezone['timezone']
+            timezone = guild['timezone']
 
         hour = hour % 12 + 12 if PM else hour % 12
         tz = pytz.timezone(timezone)
@@ -282,9 +291,10 @@ class Schedule(commands.Cog):
 
         await db.execute(
             "INSERT INTO events (id, guild_id, name, description, timestamp) VALUES ($1, $2, $3, $4, $5)",
-            id, guild_id, name, description, timestamp
+            id, guild['guild_id'], name, description, timestamp
         )
         await ctx.send("Created new event {}!".format(name))
+        await self.update_schedule(guild['guild_id'])
         
     # function for testing purposes
     @cog_ext.cog_subcommand(
@@ -303,9 +313,16 @@ class Schedule(commands.Cog):
         name="check",
         guild_ids=guild_ids, # dont remove
     )
-    @can_edit_schedule()
     async def check_edit(self, ctx: SlashContext):
-        await ctx.send("Can edit the schedule!", hidden=True)
+        guild = await self.fetch_schedule(ctx)
+        if not guild:
+            await ctx.send("Schedule not found!", hidden=True)
+            return
+        
+        if not await self.can_edit_schedule(ctx, guild):
+            await ctx.send("You don't have permission to manage the schedule!", hidden=True)
+        else:
+            await ctx.send("Can manage the schedule!", hidden=True)
 
 
 def setup(bot):
