@@ -14,6 +14,42 @@ class Schedule(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    def can_edit_schedule():
+        async def predicate(ctx):
+            if not ctx.guild:
+                # not in a guild
+                return False
+
+            guild_id = str(ctx.guild.id)
+            guild = await ctx.bot.pg_con.fetchrow("SELECT guild_id, schedule_channel_id, schedule_role_id FROM guilds WHERE guild_id = $1", guild_id)
+            if not guild:
+                # schedule does not exist
+                return False
+
+            if ctx.guild.owner_id == ctx.author.id:
+                # is owner
+                return True
+
+            channel = discord.utils.get(ctx.bot.get_all_channels(), id=int(guild['schedule_channel_id']), guild__id=int(guild_id))
+            if not channel:
+                # schedule channel not found
+                return False
+            
+            if channel.permissions_for(ctx.author).administrator:
+                # is administrator
+                return True
+
+            if not channel.permissions_for(ctx.author).view_channel:
+                # cannot view channel
+                return False
+            
+            if guild['schedule_role_id']:
+                if not discord.utils.get(ctx.author.roles, id=int(guild['schedule_role_id'])):
+                    # don't have required role
+                    return False
+            return True
+        return commands.check(predicate)
+
     async def update_schedule(self, guild_id: str):
         db = self.bot.pg_con
 
@@ -202,6 +238,7 @@ class Schedule(commands.Cog):
         ],
         guild_ids=guild_ids, # TODO: remove on main
     )
+    @can_edit_schedule()
     async def event_add(self, ctx:SlashContext, name:str, month:int, day:int, hour:int, minute:int, period:str, description:str = "", timezone:str=""):
         guild_id = str(ctx.guild_id)
         db = self.bot.pg_con
@@ -259,6 +296,16 @@ class Schedule(commands.Cog):
     async def update(self, ctx: SlashContext):
         await self.update_schedule(str(ctx.guild_id))
         await ctx.send("Updated schedule!", hidden=True)
+
+    # function for testing purposes
+    @cog_ext.cog_subcommand(
+        base="schedule",
+        name="check",
+        guild_ids=guild_ids, # dont remove
+    )
+    @can_edit_schedule()
+    async def check_edit(self, ctx: SlashContext):
+        await ctx.send("Can edit the schedule!", hidden=True)
 
 
 def setup(bot):
