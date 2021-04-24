@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord_slash import cog_ext, SlashContext
 from discord_slash.utils import manage_commands
 
-import pytz, logging
+import pytz, logging, os, random
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
@@ -15,7 +15,6 @@ class Schedule(commands.Cog):
         self.bot = bot
 
     async def update_schedule(self, guild_id: str):
-        logging.info("Updating guild: {}".format(guild_id))
         db = self.bot.pg_con
 
         guild = await db.fetchrow("SELECT * FROM guilds WHERE guild_id = $1", guild_id)
@@ -36,7 +35,7 @@ class Schedule(commands.Cog):
             message = await channel.send("Generating schedule...")
         
         tz = pytz.timezone(guild['timezone'])
-        t = datetime.now(tz)
+        now = pytz.utc.localize(datetime.utcnow()).astimezone(tz)
 
         # event functionality
         events = await db.fetch("SELECT * FROM events WHERE guild_id = $1 ORDER BY timestamp DESC", guild_id)
@@ -44,7 +43,7 @@ class Schedule(commands.Cog):
         # sort events
         sorted_events = [[], [], [], [], [], []]
         for event in events:
-            days = (event['timestamp'] - t).days
+            days = (event['timestamp'].astimezone(tz).date() - now.date()).days
 
             # keep inside array
             days = max(0, days)
@@ -52,29 +51,30 @@ class Schedule(commands.Cog):
 
             sorted_events[days].append(event)
 
-        def format_events(events, format):
+        def format_events(events, format, tz):
             value = ""
             for event in events:
-                value += "{} - {}\n".format(event['timestamp'].strftime(format), event['name'])
+                t = event['timestamp'].astimezone(tz)
+                value += "{} - {}\n".format(t.strftime(format), event['name'])
             value = value[:-1] if value else "Nothing"
             return value
 
         embed = discord.Embed(
             colour=discord.Colour.blue(),
-            timestamp=datetime.now(pytz.utc),
-            title="Schedule for {}".format(t.strftime('%A, %B %d, %Y')),
+            timestamp=pytz.utc.localize(datetime.utcnow()),
+            title="Schedule for {}".format(now.strftime('%A, %B %d, %Y')),
         )
 
         embed.set_author(name=channel.guild.name, icon_url=channel.guild.icon_url)
 
-        embed.add_field(name="Today:", value=format_events(sorted_events[0], "%I:%M %p"), inline=False)
-        embed.add_field(name="Tomorrow:", value=format_events(sorted_events[1], "%I:%M %p"), inline=False)
-        embed.add_field(name=(t+relativedelta(days=+2)).strftime('%A') + ":", value=format_events(sorted_events[2], "%I:%M %p"), inline=False)
-        embed.add_field(name=(t+relativedelta(days=+3)).strftime('%A') + ":", value=format_events(sorted_events[3], "%I:%M %p"), inline=False)
-        embed.add_field(name=(t+relativedelta(days=+4)).strftime('%A') + ":", value=format_events(sorted_events[4], "%I:%M %p"), inline=False)
+        embed.add_field(name="Today:", value=format_events(sorted_events[0], "%I:%M %p", tz), inline=False)
+        embed.add_field(name="Tomorrow:", value=format_events(sorted_events[1], "%I:%M %p", tz), inline=False)
+        embed.add_field(name=(now+relativedelta(days=+2)).strftime('%A') + ":", value=format_events(sorted_events[2], "%I:%M %p", tz), inline=False)
+        embed.add_field(name=(now+relativedelta(days=+3)).strftime('%A') + ":", value=format_events(sorted_events[3], "%I:%M %p", tz), inline=False)
+        embed.add_field(name=(now+relativedelta(days=+4)).strftime('%A') + ":", value=format_events(sorted_events[4], "%I:%M %p", tz), inline=False)
 
         if sorted_events[5]:
-            embed.add_field(name="Future:", value=format_events(sorted_events[5], "%m/%d"), inline=False)
+            embed.add_field(name="Future:", value=format_events(sorted_events[5], "%m/%d", tz), inline=False)
         
         embed.set_footer(text=guild['timezone'])
         await message.edit(content=None, embed=embed)
@@ -135,6 +135,120 @@ class Schedule(commands.Cog):
         await ctx.send("Setup complete!")
         await self.update_schedule(guild_id)
 
+    @cog_ext.cog_subcommand(
+        base="schedule",
+        subcommand_group="events",
+        name="add",
+        description="Add an event to the schedule.",
+        options=[
+            manage_commands.create_option(
+                name="name",
+                description="Name of the event",
+                option_type=3,
+                required=True,
+            ),
+            manage_commands.create_option(
+                name="month",
+                description="Month of the event.",
+                option_type=4,
+                required=True,
+            ),
+            manage_commands.create_option(
+                name="day",
+                description="Day of the event.",
+                option_type=4,
+                required=True,
+            ),
+            manage_commands.create_option(
+                name="hour",
+                description="Hour of the event.",
+                option_type=4,
+                required=True,
+            ),
+            manage_commands.create_option(
+                name="minute",
+                description="Minute of the event.",
+                option_type=4,
+                required=True,
+            ),
+            manage_commands.create_option(
+                name="period",
+                description="AM or PM.",
+                option_type=3,
+                required=True,
+                choices=[
+                    manage_commands.create_choice(
+                        value="AM",
+                        name="AM",
+                    ),
+                    manage_commands.create_choice(
+                        value="PM",
+                        name="PM",
+                    ),
+                ],
+            ),
+            manage_commands.create_option(
+                name="description",
+                description="Description of the event",
+                option_type=3,
+                required=False,
+            ),
+            manage_commands.create_option(
+                name="timezone",
+                description="Your timezone. Will use the server timezone is not specified.",
+                option_type=3,
+                required=False,
+            ),
+        ],
+        guild_ids=guild_ids, # TODO: remove on main
+    )
+    async def event_add(self, ctx:SlashContext, name:str, month:int, day:int, hour:int, minute:int, period:str, description:str = "", timezone:str=""):
+        guild_id = str(ctx.guild_id)
+        db = self.bot.pg_con
+        PM = period == "PM"
+
+        # checks
+        if len(name) > 50:
+            await ctx.send("Name too long! Name must not be longer than 50 characters", hidden=True)
+            return
+        if not 0 <= hour <= 12:
+            await ctx.send("Invalid hour!", hidden=True)
+            return
+
+        if timezone:
+            if timezone not in pytz.all_timezones:
+                await ctx.send("Invalid timezone!", hidden=True)
+                return
+        else:
+            timezone = await db.fetchrow("SELECT guild_id, timezone FROM guilds WHERE guild_id = $1", guild_id)
+            timezone = timezone['timezone']
+
+        hour = hour % 12 + 12 if PM else hour % 12
+        tz = pytz.timezone(timezone)
+        now = pytz.utc.localize(datetime.utcnow()).astimezone(tz)
+        year = now.year
+
+        try:
+            timestamp = tz.localize(datetime(year, month, day, hour, minute))
+
+            if timestamp < now:
+                timestamp = tz.localize(datetime(year, month, day, hour, minute))
+        except:
+            await ctx.send("Invalid time!", hidden=True)
+            return
+
+        # generate unused id
+        while True:
+            id = str(hex(random.randrange(16**6-1)))[2:].zfill(6).upper()
+            if not await db.fetch("SELECT id FROM events WHERE id = $1", id):
+                break
+
+        await db.execute(
+            "INSERT INTO events (id, guild_id, name, description, timestamp) VALUES ($1, $2, $3, $4, $5)",
+            id, guild_id, name, description, timestamp
+        )
+        await ctx.send("Created new event {}!".format(name))
+        
     # function for testing purposes
     @cog_ext.cog_subcommand(
         base="schedule",
