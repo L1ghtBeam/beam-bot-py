@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord_slash import cog_ext, SlashContext
 from discord_slash.utils import manage_commands
 
@@ -13,6 +13,23 @@ guild_ids = [834890280959475712]
 class Schedule(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.update_all.start()
+
+    def cog_unload(self):
+        self.update_all.cancel()
+
+    # TODO: optimize this - only update necessary guilds
+    @tasks.loop(minutes=15.0)
+    async def update_all(self):
+        guilds = await self.bot.pg_con.fetch("SELECT guild_id from guilds")
+        logging.info("Updating {} guilds".format(str(len(guilds))))
+        for guild in guilds:
+            await self.update_schedule(guild['guild_id'])
+    
+    @update_all.before_loop
+    async def before_update_all(self):
+        await self.bot.wait_until_ready()
+        logging.info("Starting schedule updater")
 
     async def fetch_schedule(self, ctx: SlashContext):
         if not ctx.guild:
@@ -74,15 +91,17 @@ class Schedule(commands.Cog):
         tz = pytz.timezone(guild['timezone'])
         now = pytz.utc.localize(datetime.utcnow()).astimezone(tz)
 
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         # event functionality
-        events = await db.fetch("SELECT * FROM events WHERE guild_id = $1 ORDER BY timestamp DESC", guild_id)
+        events = await db.fetch("SELECT * FROM events WHERE guild_id = $1 AND timestamp >= $2 ORDER BY timestamp ASC", guild_id, start)
 
         # sort events
         sorted_events = [[], [], [], [], [], []]
         for event in events:
             days = (event['timestamp'].astimezone(tz).date() - now.date()).days
 
-            if days < 0:
+            if days < 0: # this should never happen anymore but I'm keeping this in just in case
+                logging.error(f"Expired event \"{event['id']}\" passed. You shouldn't see this message.")
                 continue
 
             # keep inside array
@@ -293,9 +312,128 @@ class Schedule(commands.Cog):
             "INSERT INTO events (id, guild_id, name, description, timestamp) VALUES ($1, $2, $3, $4, $5)",
             id, guild['guild_id'], name, description, timestamp
         )
-        await ctx.send("Created new event {}!".format(name))
+        await ctx.send("Created new event **{}**.".format(name))
         await self.update_schedule(guild['guild_id'])
         
+    @cog_ext.cog_subcommand(
+        base="schedule",
+        subcommand_group="events",
+        name="list",
+        description="List events and their IDs.",
+        options=[
+            manage_commands.create_option(
+                name="old_events",
+                description="Include events that have ended. False by default.",
+                option_type=5,
+                required=False,
+            ),
+        ],
+        guild_ids=guild_ids,
+    )
+    async def event_list(self, ctx:SlashContext, old_events:bool = False):
+        guild = await self.fetch_schedule(ctx)
+        if not guild:
+            await ctx.send("Schedule not found!", hidden=True)
+            return
+
+        if not old_events:
+            tz = pytz.timezone(guild['timezone'])
+            now = pytz.utc.localize(datetime.utcnow()).astimezone(tz)
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            events = await self.bot.pg_con.fetch("SELECT * FROM events WHERE guild_id = $1 AND timestamp >= $2 ORDER BY timestamp ASC", guild['guild_id'], start)
+        else:
+            events = await self.bot.pg_con.fetch("SELECT * FROM events WHERE guild_id = $1 ORDER BY timestamp DESC", guild['guild_id'])
+        
+        content = ""
+        for event in events:
+            content += f"`{event['id']}` - {event['name']}\n"
+        content = content[:-1] if content else "No events found!"
+        await ctx.send(content=content, hidden=True)
+
+    @cog_ext.cog_subcommand(
+        base="schedule",
+        subcommand_group="events",
+        name="info",
+        description="Get info about an event, including the description",
+        options=[
+            manage_commands.create_option(
+                name="id",
+                description="Id of the event get info from. Use /schedule event list to get ids.",
+                option_type=3,
+                required=True,
+            ),
+        ],
+        guild_ids=guild_ids,
+    )
+    async def event_info(self, ctx:SlashContext, id:str):
+        db = self.bot.pg_con
+
+        if len(id) != 6:
+            await ctx.send("Invalid id! Use `/schedule events list` to get ids.", hidden=True)
+            return
+        
+        event = await db.fetchrow("SELECT * FROM events WHERE id = $1", id)
+        if not event:
+            await ctx.send("Event not found!", hidden=True)
+            return
+        
+        guild = await self.fetch_schedule(ctx)
+        if guild:
+            tz = pytz.timezone(guild['timezone'])
+        else:
+            guild = await self.bot.pg_con.fetchrow("SELECT guild_id, timezone FROM guilds WHERE guild_id = $1", event['guild_id'])
+            if guild:
+                tz = pytz.timezone(guild['timezone'])
+            else:
+                tz = pytz.utc
+
+        content = "**{}** - `{}`\n{} ({})".format(event['name'], event['id'], event['timestamp'].astimezone(tz).strftime('%c'), str(tz))
+
+        if event['description']:
+            content+=f"\n\n{event['description']}"
+
+        await ctx.send(content=content, hidden=True)
+
+    @cog_ext.cog_subcommand(
+        base="schedule",
+        subcommand_group="events",
+        name="remove",
+        description="Remove an event from the schedule.",
+        options=[
+            manage_commands.create_option(
+                name="id",
+                description="Id of the event to remove. Use /schedule event list to get ids.",
+                option_type=3,
+                required=True,
+            ),
+        ],
+        guild_ids=guild_ids,
+    )
+    async def event_remove(self, ctx:SlashContext, id:str):
+        db = self.bot.pg_con
+
+        if len(id) != 6:
+            await ctx.send("Invalid id! Use `/schedule events list` to get ids.", hidden=True)
+            return
+
+        guild = await self.fetch_schedule(ctx)
+        if not guild:
+            await ctx.send("Schedule not found!", hidden=True)
+            return
+
+        if not await self.can_edit_schedule(ctx, guild):
+            await ctx.send("You do not have permission to manage this schedule!", hidden=True)
+            return
+        
+        event = await db.fetchrow("SELECT id, name FROM events WHERE id = $1 AND guild_id = $2", id, guild['guild_id'])
+        if not event:
+            await ctx.send("Event not found!", hidden=True)
+            return
+
+        await db.execute("DELETE FROM events WHERE id = $1 AND guild_id = $2", event['id'], guild['guild_id'])
+        await ctx.send("Deleted event **{}**".format(event['name']))
+        await self.update_schedule(guild['guild_id'])
+
     # function for testing purposes
     @cog_ext.cog_subcommand(
         base="schedule",
