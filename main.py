@@ -7,11 +7,11 @@ import logging, os, asyncpg
 
 
 DB_PORT = '5432'
-DB_NAME = 'Beam Bot'
 
 TOKEN = open('TOKEN.txt', 'r').read()
 PG_PASS = open('PG_PASS.txt', 'r').read()
 DB_ADDRESS = open('DB_ADDRESS.txt', 'r').read()
+DB_NAME = open('DB_NAME.txt', 'r').read()
 
 guild_ids = [702716876601688114, 834890280959475712]
 
