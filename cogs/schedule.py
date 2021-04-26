@@ -161,7 +161,6 @@ class Schedule(commands.Cog):
                 required=False,
             ),
         ],
-        guild_ids=guild_ids, # TODO: remove on main
     )
     @commands.guild_only()
     async def setup(self, ctx: SlashContext, channel: discord.TextChannel, timezone: str, role: discord.Role = None):
@@ -258,7 +257,6 @@ class Schedule(commands.Cog):
                 required=False,
             ),
         ],
-        guild_ids=guild_ids, # TODO: remove on main
     )
     async def event_add(self, ctx:SlashContext, name:str, month:int, day:int, hour:int, minute:int, period:str, description:str = "", timezone:str=""):
         guild = await self.fetch_schedule(ctx)
@@ -328,7 +326,6 @@ class Schedule(commands.Cog):
                 required=False,
             ),
         ],
-        guild_ids=guild_ids,
     )
     async def event_list(self, ctx:SlashContext, old_events:bool = False):
         guild = await self.fetch_schedule(ctx)
@@ -363,7 +360,6 @@ class Schedule(commands.Cog):
                 required=True,
             ),
         ],
-        guild_ids=guild_ids,
     )
     async def event_info(self, ctx:SlashContext, id:str):
         db = self.bot.pg_con
@@ -407,7 +403,6 @@ class Schedule(commands.Cog):
                 required=True,
             ),
         ],
-        guild_ids=guild_ids,
     )
     async def event_remove(self, ctx:SlashContext, id:str):
         db = self.bot.pg_con
@@ -434,33 +429,36 @@ class Schedule(commands.Cog):
         await ctx.send("Deleted event **{}**".format(event['name']))
         await self.update_schedule(guild['guild_id'])
 
-    # function for testing purposes
-    @cog_ext.cog_subcommand(
-        base="schedule",
-        name="update",
-        guild_ids=guild_ids, # dont remove
-    )
-    @commands.guild_only()
-    async def update(self, ctx: SlashContext):
-        await self.update_schedule(str(ctx.guild_id))
-        await ctx.send("Updated schedule!", hidden=True)
+    # for some reason these commands cause an error if you make the other commands in this cog global
+    # you dont need these commands so just keep them commented out
 
-    # function for testing purposes
-    @cog_ext.cog_subcommand(
-        base="schedule",
-        name="check",
-        guild_ids=guild_ids, # dont remove
-    )
-    async def check_edit(self, ctx: SlashContext):
-        guild = await self.fetch_schedule(ctx)
-        if not guild:
-            await ctx.send("Schedule not found!", hidden=True)
-            return
+    # # function for testing purposes
+    # @cog_ext.cog_subcommand(
+    #     base="schedule",
+    #     name="update",
+    #     guild_ids=guild_ids, # dont remove
+    # )
+    # @commands.guild_only()
+    # async def update(self, ctx: SlashContext):
+    #     await self.update_schedule(str(ctx.guild_id))
+    #     await ctx.send("Updated schedule!", hidden=True)
+
+    # # function for testing purposes
+    # @cog_ext.cog_subcommand(
+    #     base="schedule",
+    #     name="check",
+    #     guild_ids=guild_ids, # dont remove
+    # )
+    # async def check_edit(self, ctx: SlashContext):
+    #     guild = await self.fetch_schedule(ctx)
+    #     if not guild:
+    #         await ctx.send("Schedule not found!", hidden=True)
+    #         return
         
-        if not await self.can_edit_schedule(ctx, guild):
-            await ctx.send("You don't have permission to manage the schedule!", hidden=True)
-        else:
-            await ctx.send("Can manage the schedule!", hidden=True)
+    #     if not await self.can_edit_schedule(ctx, guild):
+    #         await ctx.send("You don't have permission to manage the schedule!", hidden=True)
+    #     else:
+    #         await ctx.send("Can manage the schedule!", hidden=True)
 
 
 def setup(bot):

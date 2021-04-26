@@ -109,7 +109,7 @@ async def reload(ctx: SlashContext, cog: str):
     guild_ids = guild_ids,
 )
 @commands.is_owner()
-async def reload(ctx: SlashContext, cog: str):
+async def load(ctx: SlashContext, cog: str):
     bot.load_extension(f"cogs.{cog}")
     await slash.sync_all_commands()
     await ctx.send(f"Successfully loaded {cog}.", hidden=True)
@@ -127,7 +127,7 @@ async def reload(ctx: SlashContext, cog: str):
     guild_ids = guild_ids,
 )
 @commands.is_owner()
-async def reload(ctx: SlashContext, cog: str):
+async def unload(ctx: SlashContext, cog: str):
     bot.unload_extension(f"cogs.{cog}")
     await slash.sync_all_commands()
     await ctx.send(f"Successfully unloaded {cog}.", hidden=True)
