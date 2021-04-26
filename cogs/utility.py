@@ -4,7 +4,7 @@ from discord.ext import commands
 from discord_slash import cog_ext, SlashContext
 from discord_slash.utils import manage_commands
 
-import pytz
+guild_ids = [834890280959475712]
 
 
 class Utility(commands.Cog):
@@ -32,6 +32,16 @@ class Utility(commands.Cog):
             channel = await ctx.author.create_dm()
             with open("data/timezones.txt", "rb") as file:
                 await channel.send(file=discord.File(file, "timezones.txt"))
+    
+    @cog_ext.cog_subcommand(
+        base="help",
+        name="schedule",
+        description="Get help for schedule commands and setup.",
+        guild_ids=guild_ids,
+    )
+    async def help_schedule(self, ctx:SlashContext):
+        content = open("data/help/schedule.txt", "r").read()
+        await ctx.send(content=content, hidden=True)
 
 
 def setup(bot):
