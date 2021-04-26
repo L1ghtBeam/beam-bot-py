@@ -161,6 +161,7 @@ class Schedule(commands.Cog):
                 required=False,
             ),
         ],
+        guild_ids=guild_ids, # TODO: remove on main
     )
     @commands.guild_only()
     async def setup(self, ctx: SlashContext, channel: discord.TextChannel, timezone: str, role: discord.Role = None):
@@ -257,6 +258,7 @@ class Schedule(commands.Cog):
                 required=False,
             ),
         ],
+        guild_ids=guild_ids, # TODO: remove on main
     )
     async def event_add(self, ctx:SlashContext, name:str, month:int, day:int, hour:int, minute:int, period:str, description:str = "", timezone:str=""):
         guild = await self.fetch_schedule(ctx)
@@ -326,6 +328,7 @@ class Schedule(commands.Cog):
                 required=False,
             ),
         ],
+        guild_ids=guild_ids,
     )
     async def event_list(self, ctx:SlashContext, old_events:bool = False):
         guild = await self.fetch_schedule(ctx)
@@ -360,6 +363,7 @@ class Schedule(commands.Cog):
                 required=True,
             ),
         ],
+        guild_ids=guild_ids,
     )
     async def event_info(self, ctx:SlashContext, id:str):
         db = self.bot.pg_con
@@ -403,6 +407,7 @@ class Schedule(commands.Cog):
                 required=True,
             ),
         ],
+        guild_ids=guild_ids,
     )
     async def event_remove(self, ctx:SlashContext, id:str):
         db = self.bot.pg_con
