@@ -15,7 +15,7 @@ DB_ADDRESS = open('DB_ADDRESS.txt', 'r').read()
 DB_NAME = open('DB_NAME.txt', 'r').read()
 APPLICATION_ID = open('APPLICATION_ID.txt', 'r').read()
 
-guild_ids = [702716876601688114, 834890280959475712]
+guild_ids = [702716876601688114]
 
 
 # logging
