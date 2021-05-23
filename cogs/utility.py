@@ -4,8 +4,6 @@ from discord.ext import commands
 from discord_slash import cog_ext, SlashContext
 from discord_slash.utils import manage_commands
 
-guild_ids = [834890280959475712]
-
 
 class Utility(commands.Cog):
 
@@ -37,7 +35,6 @@ class Utility(commands.Cog):
         base="help",
         name="schedule",
         description="Get help for schedule commands and setup.",
-        guild_ids=guild_ids,
     )
     async def help_schedule(self, ctx:SlashContext):
         content = open("data/help/schedule.txt", "r").read()

@@ -13,7 +13,6 @@ TOKEN = open('TOKEN.txt', 'r').read()
 PG_PASS = open('PG_PASS.txt', 'r').read()
 DB_ADDRESS = open('DB_ADDRESS.txt', 'r').read()
 DB_NAME = open('DB_NAME.txt', 'r').read()
-APPLICATION_ID = open('APPLICATION_ID.txt', 'r').read()
 
 guild_ids = [702716876601688114]
 
@@ -47,7 +46,7 @@ bot = commands.Bot(
     help_command = help_command,
     intents=intents,
 )
-slash = SlashCommand(bot, sync_commands=True, sync_on_cog_reload=True, application_id=APPLICATION_ID)
+slash = SlashCommand(bot, sync_commands=True, sync_on_cog_reload=True)
 
 async def create_db_pool():
     bot.pg_con = await asyncpg.create_pool(host=DB_ADDRESS, port=DB_PORT, database=DB_NAME, user='postgres', password=PG_PASS)

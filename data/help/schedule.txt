@@ -1,5 +1,5 @@
-To setup the schedule, first **make a text channel** for it. **Change the permissions** of the text channel so the only user who can send messages is this bot. Next **pick a timezone** from `/timezones` to use for the schedule. You can now use `/schedule setup` to setup the schedule. If you wish, you can choose a role that will be able to manage the schedule. If you do not input a role, anyone who can see the schedule channel will be able to manage the schedule.
+To setup the schedule, first **make a text channel** for it. **Change the permissions** of the text channel so the only user who can send messages is this bot. Next **pick a timezone** from `/timezones` to use for the schedule. You can now use `/schedule setup`. If you wish, you can choose a role that will be able to manage the schedule. If you do not input a role, anyone who can see the schedule channel will be able to manage it.
 
-Use `/schedule events add` to add an event to the schedule. If you input a timezone, the event will be converted from the timezone entered.
+Use `/schedule events add` to add an event. If you input a timezone, the event will be converted from the timezone entered.
 
 In order to get info or delete an event, you will need the event's id. Use `/schedule events list`.

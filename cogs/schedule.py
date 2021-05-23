@@ -7,7 +7,7 @@ import pytz, logging, os, random
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-guild_ids = [834890280959475712]
+#guild_ids = [702716876601688114]
 
 
 class Schedule(commands.Cog):
