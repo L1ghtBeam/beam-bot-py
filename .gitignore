@@ -1,7 +1,3 @@
 *.log
 *.pyc
-TOKEN.txt
-PG_PASS.txt
-DB_ADDRESS.txt
-DB_NAME.txt
-APPLICATION_ID.txt
+bot.json

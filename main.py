@@ -3,16 +3,15 @@ from discord.ext import commands
 from discord_slash import SlashCommand, SlashContext
 from discord_slash.utils import manage_commands
 
-import logging, os, asyncpg
+import logging, os, asyncpg, json
 
 
 DB_PORT = '5432'
 
-# This is getting too long, make this a json file soon
-TOKEN = open('TOKEN.txt', 'r').read()
-PG_PASS = open('PG_PASS.txt', 'r').read()
-DB_ADDRESS = open('DB_ADDRESS.txt', 'r').read()
-DB_NAME = open('DB_NAME.txt', 'r').read()
+# get bot data from bot.json file
+with open("bot.json", "r") as f:
+    bot_data = json.load(f)
+
 
 guild_ids = [702716876601688114]
 
@@ -49,7 +48,7 @@ bot = commands.Bot(
 slash = SlashCommand(bot, sync_commands=True, sync_on_cog_reload=True)
 
 async def create_db_pool():
-    bot.pg_con = await asyncpg.create_pool(host=DB_ADDRESS, port=DB_PORT, database=DB_NAME, user='postgres', password=PG_PASS)
+    bot.pg_con = await asyncpg.create_pool(host=bot_data['address'], port=DB_PORT, database=bot_data['name'], user='postgres', password=bot_data['pass'])
 
 @bot.event
 async def on_ready():
@@ -139,4 +138,4 @@ for file in os.listdir('./cogs'):
         bot.load_extension(f'cogs.{file[:-3]}')
 
 bot.loop.run_until_complete(create_db_pool())
-bot.run(TOKEN)
+bot.run(bot_data['token'])
