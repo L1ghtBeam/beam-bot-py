@@ -7,7 +7,7 @@ import pytz, logging, os, random
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-#guild_ids = [702716876601688114]
+guild_ids = [834890280959475712]
 
 
 class Schedule(commands.Cog):
@@ -18,7 +18,6 @@ class Schedule(commands.Cog):
     def cog_unload(self):
         self.update_all.cancel()
 
-    # TODO: optimize this - only update necessary guilds
     @tasks.loop(minutes=15.0)
     async def update_all(self):
         guilds = await self.bot.pg_con.fetch("SELECT guild_id from guilds")
@@ -363,6 +362,7 @@ class Schedule(commands.Cog):
     )
     async def event_info(self, ctx:SlashContext, id:str):
         db = self.bot.pg_con
+        id = id.upper()
 
         if len(id) != 6:
             await ctx.send("Invalid id! Use `/schedule events list` to get ids.", hidden=True)
@@ -429,36 +429,33 @@ class Schedule(commands.Cog):
         await ctx.send("Deleted event **{}**".format(event['name']))
         await self.update_schedule(guild['guild_id'])
 
-    # for some reason these commands cause an error if you make the other commands in this cog global
-    # you dont need these commands so just keep them commented out
+    # function for testing purposes - comment out on master
+    @cog_ext.cog_subcommand(
+        base="test",
+        name="update",
+        guild_ids=guild_ids, # dont remove
+    )
+    @commands.guild_only()
+    async def update(self, ctx: SlashContext):
+        await self.update_schedule(str(ctx.guild_id))
+        await ctx.send("Updated schedule!", hidden=True)
 
-    # # function for testing purposes
-    # @cog_ext.cog_subcommand(
-    #     base="schedule",
-    #     name="update",
-    #     guild_ids=guild_ids, # dont remove
-    # )
-    # @commands.guild_only()
-    # async def update(self, ctx: SlashContext):
-    #     await self.update_schedule(str(ctx.guild_id))
-    #     await ctx.send("Updated schedule!", hidden=True)
-
-    # # function for testing purposes
-    # @cog_ext.cog_subcommand(
-    #     base="schedule",
-    #     name="check",
-    #     guild_ids=guild_ids, # dont remove
-    # )
-    # async def check_edit(self, ctx: SlashContext):
-    #     guild = await self.fetch_schedule(ctx)
-    #     if not guild:
-    #         await ctx.send("Schedule not found!", hidden=True)
-    #         return
+    # function for testing purposes - comment out on master
+    @cog_ext.cog_subcommand(
+        base="test",
+        name="check",
+        guild_ids=guild_ids, # dont remove
+    )
+    async def check_edit(self, ctx: SlashContext):
+        guild = await self.fetch_schedule(ctx)
+        if not guild:
+            await ctx.send("Schedule not found!", hidden=True)
+            return
         
-    #     if not await self.can_edit_schedule(ctx, guild):
-    #         await ctx.send("You don't have permission to manage the schedule!", hidden=True)
-    #     else:
-    #         await ctx.send("Can manage the schedule!", hidden=True)
+        if not await self.can_edit_schedule(ctx, guild):
+            await ctx.send("You don't have permission to manage the schedule!", hidden=True)
+        else:
+            await ctx.send("Can manage the schedule!", hidden=True)
 
 
 def setup(bot):
