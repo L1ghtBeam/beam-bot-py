@@ -45,7 +45,7 @@ bot = commands.Bot(
     help_command = help_command,
     intents=intents,
 )
-slash = SlashCommand(bot, sync_commands=True, sync_on_cog_reload=True)
+slash = SlashCommand(bot, sync_on_cog_reload=True)
 
 async def create_db_pool():
     bot.pg_con = await asyncpg.create_pool(host=bot_data['address'], port=DB_PORT, database=bot_data['name'], user='postgres', password=bot_data['pass'])
@@ -131,6 +131,16 @@ async def unload(ctx: SlashContext, cog: str):
     bot.unload_extension(f"cogs.{cog}")
     await slash.sync_all_commands()
     await ctx.send(f"Successfully unloaded {cog}.", hidden=True)
+
+@slash.slash(
+    name = "sync",
+    description="Sync commands.",
+    guild_ids=guild_ids,
+)
+@commands.is_owner()
+async def sync(ctx:SlashContext):
+    await slash.sync_all_commands()
+    await ctx.send("Successfully synced commands!")
 
 # load cogs
 for file in os.listdir('./cogs'):
