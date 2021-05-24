@@ -1,3 +1,4 @@
 *.log
 *.pyc
 bot.json
+cogs/_*.py
