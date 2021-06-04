@@ -83,7 +83,7 @@ async def cogs(ctx: commands.Context, *args):
             await ctx.send(f"Successfully unloaded {args[1]}. Make sure to use the `sync` command!")
         elif args[0] == "reload":
             bot.reload_extension(f"cogs.{args[1]}")
-            await ctx.send(f"Successfully reloaded {args[1]}. If any commands have been updated, make sure to use the `/sync` command!")
+            await ctx.send(f"Successfully reloaded {args[1]}. If any commands have been updated, make sure to use the `sync` command!")
         else:
             await ctx.send("Invalid usage!")
     else:
