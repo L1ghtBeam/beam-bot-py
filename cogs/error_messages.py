@@ -10,21 +10,32 @@ class Error(commands.Cog):
         self.bot = bot
 
     @commands.Cog.listener()
+    async def on_command_error(self, ctx: commands.Context, error: Exception):
+        # Allows us to check for original exceptions raised and sent to CommandInvokeError.
+        # If nothing is found. We keep the exception passed to on_command_error.
+        error = getattr(error, 'original', error)
+
+        # checks.
+        if isinstance(error, commands.errors.NotOwner):
+            await ctx.send('Only the bot owner can use this command.')
+        # in-command errors.
+        elif isinstance(error, commands.errors.ExtensionNotFound):
+            await ctx.send('Extension not found.')
+        elif isinstance(error, commands.errors.ExtensionAlreadyLoaded):
+            await ctx.send('Extension already loaded.')
+        elif isinstance(error, commands.errors.ExtensionNotLoaded):
+            await ctx.send('Extension not loaded.')
+        else:
+            logging.exception("Command error!", exc_info=error)
+
+    @commands.Cog.listener()
     async def on_slash_command_error(self, ctx: SlashContext, ex: Exception):
         # checks.
         if isinstance(ex, commands.errors.NotOwner):
             await ctx.send('Only the bot owner can use this command.', hidden=True)
         elif isinstance(ex, commands.errors.NoPrivateMessage):
             await ctx.send('This command cannot be used in a direct message.', hidden=True)
-        elif isinstance(ex, error.CheckFailure):
-            await ctx.send('You cannot use this command.', hidden=True)
         # in-command errors.
-        elif isinstance(ex, commands.errors.ExtensionNotFound):
-            await ctx.send('Extension not found.', hidden=True)
-        elif isinstance(ex, commands.errors.ExtensionAlreadyLoaded):
-            await ctx.send('Extension already loaded.', hidden=True)
-        elif isinstance(ex, commands.errors.ExtensionNotLoaded):
-            await ctx.send('Extension not loaded.', hidden=True)
         else:
             logging.exception("Slash command error!", exc_info=ex)
 
