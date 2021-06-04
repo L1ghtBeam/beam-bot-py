@@ -77,13 +77,13 @@ async def cogs(ctx: commands.Context, *args):
     elif len(args) > 1:
         if args[0] == "load":
             bot.load_extension(f"cogs.{args[1]}")
-            await ctx.send(f"Successfully loaded {args[1]}. Make sure to use `/sync`!")
+            await ctx.send(f"Successfully loaded {args[1]}. Make sure to use the `sync` command!")
         elif args[0] == "unload":
             bot.unload_extension(f"cogs.{args[1]}")
-            await ctx.send(f"Successfully unloaded {args[1]}. Make sure to use `/sync`!")
+            await ctx.send(f"Successfully unloaded {args[1]}. Make sure to use the `sync` command!")
         elif args[0] == "reload":
             bot.reload_extension(f"cogs.{args[1]}")
-            await ctx.send(f"Successfully reloaded {args[1]}. If any commands have been updated, make sure to use `/sync`!")
+            await ctx.send(f"Successfully reloaded {args[1]}. If any commands have been updated, make sure to use the `/sync` command!")
         else:
             await ctx.send("Invalid usage!")
     else:
