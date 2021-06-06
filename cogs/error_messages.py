@@ -35,6 +35,10 @@ class Error(commands.Cog):
             await ctx.send('Only the bot owner can use this command.', hidden=True)
         elif isinstance(ex, commands.errors.NoPrivateMessage):
             await ctx.send('This command cannot be used in a direct message.', hidden=True)
+        elif isinstance(ex, commands.errors.MissingPermissions):
+            perms = ', '.join(ex.missing_perms)
+            s = 's' if len(ex.missing_perms) > 1 else ''
+            await ctx.send(f'Missing required permission{s}: {perms}.', hidden=True)
         # in-command errors.
         else:
             logging.exception("Slash command error!", exc_info=ex)

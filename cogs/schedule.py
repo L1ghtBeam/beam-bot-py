@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 from discord_slash import cog_ext, SlashContext
 from discord_slash.utils import manage_commands
 
-import pytz, logging, os, random
+import pytz, logging, os, random, asyncio
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
@@ -21,9 +21,10 @@ class Schedule(commands.Cog):
     @tasks.loop(minutes=15.0)
     async def update_all(self):
         guilds = await self.bot.pg_con.fetch("SELECT guild_id from guilds")
-        logging.info("Updating {} guilds".format(str(len(guilds))))
-        for guild in guilds:
-            await self.update_schedule(guild['guild_id'])
+        logging.info("Updating guilds...")
+        updates = asyncio.gather(*[self.update_schedule(guild['guild_id']) for guild in guilds])
+        await updates
+        logging.info("Finished updating {} guilds!".format(str(len(guilds))))
     
     @update_all.before_loop
     async def before_update_all(self):
@@ -78,6 +79,7 @@ class Schedule(commands.Cog):
         channel = discord.utils.get(self.bot.get_all_channels(), id=int(guild['schedule_channel_id']), guild__id=int(guild_id))
         if not channel:
             # channel not found
+            await db.execute("DELETE FROM guilds WHERE guild_id = $1", guild_id)
             return
         if not channel.permissions_for(channel.guild.me).send_messages:
             # invalid permissions - can't send messages in channel
@@ -162,6 +164,7 @@ class Schedule(commands.Cog):
         ],
     )
     @commands.guild_only()
+    @commands.has_guild_permissions(manage_channels=True)
     async def setup(self, ctx: SlashContext, channel: discord.TextChannel, timezone: str, role: discord.Role = None):
         guild_id = str(ctx.guild_id)
         db = self.bot.pg_con
