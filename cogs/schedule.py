@@ -432,33 +432,77 @@ class Schedule(commands.Cog):
         await ctx.send("Deleted event **{}**".format(event['name']))
         await self.update_schedule(guild['guild_id'])
 
-    # function for testing purposes - comment out on master
     @cog_ext.cog_subcommand(
-        base="test",
-        name="update",
-        guild_ids=guild_ids, # dont remove
+        base="schedule",
+        name="options",
+        description="Change the schedule options for this server.",
+        options=[
+            manage_commands.create_option(
+                name="timezone",
+                description="Timezone the schedule will use. A full list can be found with /timezones.",
+                option_type=3,
+                required=False,
+            ),
+            manage_commands.create_option(
+                name="role",
+                description="Role that can manage the schedule. If not included, everyone who can see the schedule can manage it.",
+                option_type=8,
+                required=False,
+            ),
+        ],
     )
     @commands.guild_only()
-    async def update(self, ctx: SlashContext):
-        await self.update_schedule(str(ctx.guild_id))
-        await ctx.send("Updated schedule!", hidden=True)
+    @commands.has_guild_permissions(manage_channels=True)
+    async def options(self, ctx: SlashContext, timezone: str = '', role: discord.Role = None):
+        changes = False
 
-    # function for testing purposes - comment out on master
-    @cog_ext.cog_subcommand(
-        base="test",
-        name="check",
-        guild_ids=guild_ids, # dont remove
-    )
-    async def check_edit(self, ctx: SlashContext):
         guild = await self.fetch_schedule(ctx)
         if not guild:
             await ctx.send("Schedule not found!", hidden=True)
             return
-        
+
         if not await self.can_edit_schedule(ctx, guild):
-            await ctx.send("You don't have permission to manage the schedule!", hidden=True)
+            await ctx.send("You do not have permission to manage this schedule!", hidden=True)
+            return
+
+        db = self.bot.pg_con
+        new_timezone = guild['timezone']
+        new_role = guild['schedule_role_id']
+        options = ""
+
+        if timezone:
+            if not timezone in pytz.all_timezones:
+                await ctx.send("Invalid timezone! Please refer to /timezones for a list of valid timezones.", hidden=True)
+                return
+            new_timezone = timezone
+            changes = True
+            options += f"Timezone: `{guild['timezone']}` → `{new_timezone}`"
         else:
-            await ctx.send("Can manage the schedule!", hidden=True)
+            options += f"Timezone: `{new_timezone}`" # new_timezone will be the same as the old if this gets called
+
+        def get_role_name(role):
+            role_name = discord.utils.get(ctx.guild.roles, id=int(role))
+            if role_name:
+                return role_name.name
+            else:
+                return "unknown role"
+
+        if role:
+            new_role = str(role.id)
+            changes = True
+            options += f"\nRole: `{get_role_name(guild['schedule_role_id'])}` → `{get_role_name(new_role)}`"
+        else:
+            options += f"\nRole: `{get_role_name(new_role)}`" # see above
+
+        if changes:
+            await db.execute(
+                "UPDATE guilds SET timezone = $2, schedule_role_id = $3 WHERE guild_id = $1",
+                guild['guild_id'], new_timezone, new_role
+            )
+            await ctx.send(content=options, hidden=False)
+            await self.update_schedule(guild['guild_id'])
+        else:
+            await ctx.send(content=options, hidden=True)
 
 
 def setup(bot):
