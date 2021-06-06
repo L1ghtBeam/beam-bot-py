@@ -22,8 +22,7 @@ class Schedule(commands.Cog):
     async def update_all(self):
         guilds = await self.bot.pg_con.fetch("SELECT guild_id from guilds")
         logging.info("Updating guilds...")
-        updates = asyncio.gather(*[self.update_schedule(guild['guild_id']) for guild in guilds])
-        await updates
+        await asyncio.gather(*[self.update_schedule(guild['guild_id']) for guild in guilds])
         logging.info("Finished updating {} guilds!".format(str(len(guilds))))
     
     @update_all.before_loop
@@ -136,7 +135,26 @@ class Schedule(commands.Cog):
             embed.add_field(name="Future:", value=format_events(sorted_events[5], "%m/%d", tz), inline=False)
         
         embed.set_footer(text=guild['timezone'])
-        await message.edit(content=None, embed=embed)
+        edit = asyncio.create_task(message.edit(content=None, embed=embed))
+
+        async def set_next_clear_date():
+            next_day = start + relativedelta(days=+1)
+            await db.execute(
+                "UPDATE guilds SET next_reaction_clear = $2 WHERE guild_id = $1",
+                guild['guild_id'], next_day
+            )
+
+        # clear reactions every day
+        if not guild['next_reaction_clear']:
+            await set_next_clear_date()
+        else:
+            if now > guild['next_reaction_clear']:
+                await asyncio.gather(
+                    message.clear_reactions(),
+                    set_next_clear_date()
+                )
+
+        await edit
 
     @cog_ext.cog_subcommand(
         base="schedule",
