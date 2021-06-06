@@ -157,15 +157,15 @@ class Schedule(commands.Cog):
             ),
             manage_commands.create_option(
                 name="role",
-                description="Role that can manage the schedule. If not included, everyone who can see the schedule can manage it.",
+                description="Role that can manage the schedule. Set to @everyone to allow anyone to manage it.",
                 option_type=8,
-                required=False,
+                required=True,
             ),
         ],
     )
     @commands.guild_only()
     @commands.has_guild_permissions(manage_channels=True)
-    async def setup(self, ctx: SlashContext, channel: discord.TextChannel, timezone: str, role: discord.Role = None):
+    async def setup(self, ctx: SlashContext, channel: discord.TextChannel, timezone: str, role: discord.Role):
         guild_id = str(ctx.guild_id)
         db = self.bot.pg_con
 
@@ -182,14 +182,11 @@ class Schedule(commands.Cog):
             return
         
         channel_id = str(channel.id)
-        if role:
-            role_id = str(role.id)
-        else:
-            role_id = None
-        
+        role_id = str(role.id)
+
         await db.execute(
-            "INSERT INTO guilds (guild_id, schedule_channel_id, schedule_role_id, timezone, log) VALUES ($1, $2, $3, $4, $5)",
-            guild_id, channel_id, role_id, timezone, [f"{ctx.author} created the schedule."]
+            "INSERT INTO guilds (guild_id, schedule_channel_id, schedule_role_id, timezone) VALUES ($1, $2, $3, $4)",
+            guild_id, channel_id, role_id, timezone
         )
         await ctx.send("Setup complete!")
         await self.update_schedule(guild_id)
@@ -445,7 +442,7 @@ class Schedule(commands.Cog):
             ),
             manage_commands.create_option(
                 name="role",
-                description="Role that can manage the schedule. If not included, everyone who can see the schedule can manage it.",
+                description="Role that can manage the schedule. Set to @everyone to allow anyone to manage it.",
                 option_type=8,
                 required=False,
             ),
@@ -499,7 +496,7 @@ class Schedule(commands.Cog):
                 "UPDATE guilds SET timezone = $2, schedule_role_id = $3 WHERE guild_id = $1",
                 guild['guild_id'], new_timezone, new_role
             )
-            await ctx.send(content=options, hidden=False)
+            await ctx.send(content=f"**Options changed!**\n\n{options}", hidden=False)
             await self.update_schedule(guild['guild_id'])
         else:
             await ctx.send(content=options, hidden=True)
