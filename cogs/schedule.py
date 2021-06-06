@@ -7,8 +7,6 @@ import pytz, logging, os, random, asyncio
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-guild_ids = [834890280959475712]
-
 
 class Schedule(commands.Cog):
     def __init__(self, bot):

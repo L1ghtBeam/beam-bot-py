@@ -95,7 +95,7 @@ async def cogs(ctx: commands.Context, *args):
 @commands.is_owner()
 async def sync(ctx: commands.Context):
     await ctx.send("Syncing commands...")
-    await slash.sync_all_commands()
+    await slash.sync_all_commands(delete_from_unused_guilds=True) #add delete_perms_from_unused_guilds if perms are ever used
     await ctx.send("Completed syncing all commands!")
 
 # load cogs
