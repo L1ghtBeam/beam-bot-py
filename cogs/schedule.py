@@ -3,11 +3,9 @@ from discord.ext import commands, tasks
 from discord_slash import cog_ext, SlashContext
 from discord_slash.utils import manage_commands
 
-import pytz, logging, os, random
+import pytz, logging, os, random, asyncio
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-
-#guild_ids = [702716876601688114]
 
 
 class Schedule(commands.Cog):
@@ -18,13 +16,12 @@ class Schedule(commands.Cog):
     def cog_unload(self):
         self.update_all.cancel()
 
-    # TODO: optimize this - only update necessary guilds
     @tasks.loop(minutes=15.0)
     async def update_all(self):
         guilds = await self.bot.pg_con.fetch("SELECT guild_id from guilds")
-        logging.info("Updating {} guilds".format(str(len(guilds))))
-        for guild in guilds:
-            await self.update_schedule(guild['guild_id'])
+        logging.info("Updating guilds...")
+        await asyncio.gather(*[self.update_schedule(guild['guild_id']) for guild in guilds])
+        logging.info("Finished updating {} guilds!".format(str(len(guilds))))
     
     @update_all.before_loop
     async def before_update_all(self):
@@ -79,6 +76,7 @@ class Schedule(commands.Cog):
         channel = discord.utils.get(self.bot.get_all_channels(), id=int(guild['schedule_channel_id']), guild__id=int(guild_id))
         if not channel:
             # channel not found
+            await db.execute("DELETE FROM guilds WHERE guild_id = $1", guild_id)
             return
         if not channel.permissions_for(channel.guild.me).send_messages:
             # invalid permissions - can't send messages in channel
@@ -135,7 +133,26 @@ class Schedule(commands.Cog):
             embed.add_field(name="Future:", value=format_events(sorted_events[5], "%m/%d", tz), inline=False)
         
         embed.set_footer(text=guild['timezone'])
-        await message.edit(content=None, embed=embed)
+        edit = asyncio.create_task(message.edit(content=None, embed=embed))
+
+        async def set_next_clear_date():
+            next_day = start + relativedelta(days=+1)
+            await db.execute(
+                "UPDATE guilds SET next_reaction_clear = $2 WHERE guild_id = $1",
+                guild['guild_id'], next_day
+            )
+
+        # clear reactions every day
+        if not guild['next_reaction_clear']:
+            await set_next_clear_date()
+        else:
+            if now > guild['next_reaction_clear']:
+                await asyncio.gather(
+                    message.clear_reactions(),
+                    set_next_clear_date()
+                )
+
+        await edit
 
     @cog_ext.cog_subcommand(
         base="schedule",
@@ -156,14 +173,15 @@ class Schedule(commands.Cog):
             ),
             manage_commands.create_option(
                 name="role",
-                description="Role that can manage the schedule. If not included, everyone who can see the schedule can manage it.",
+                description="Role that can manage the schedule. Set to @everyone to allow anyone to manage it.",
                 option_type=8,
-                required=False,
+                required=True,
             ),
         ],
     )
     @commands.guild_only()
-    async def setup(self, ctx: SlashContext, channel: discord.TextChannel, timezone: str, role: discord.Role = None):
+    @commands.has_guild_permissions(manage_channels=True)
+    async def setup(self, ctx: SlashContext, channel: discord.TextChannel, timezone: str, role: discord.Role):
         guild_id = str(ctx.guild_id)
         db = self.bot.pg_con
 
@@ -180,14 +198,11 @@ class Schedule(commands.Cog):
             return
         
         channel_id = str(channel.id)
-        if role:
-            role_id = str(role.id)
-        else:
-            role_id = None
-        
+        role_id = str(role.id)
+
         await db.execute(
-            "INSERT INTO guilds (guild_id, schedule_channel_id, schedule_role_id, timezone, log) VALUES ($1, $2, $3, $4, $5)",
-            guild_id, channel_id, role_id, timezone, [f"{ctx.author} created the schedule."]
+            "INSERT INTO guilds (guild_id, schedule_channel_id, schedule_role_id, timezone) VALUES ($1, $2, $3, $4)",
+            guild_id, channel_id, role_id, timezone
         )
         await ctx.send("Setup complete!")
         await self.update_schedule(guild_id)
@@ -363,6 +378,7 @@ class Schedule(commands.Cog):
     )
     async def event_info(self, ctx:SlashContext, id:str):
         db = self.bot.pg_con
+        id = id.upper()
 
         if len(id) != 6:
             await ctx.send("Invalid id! Use `/schedule events list` to get ids.", hidden=True)
@@ -429,36 +445,77 @@ class Schedule(commands.Cog):
         await ctx.send("Deleted event **{}**".format(event['name']))
         await self.update_schedule(guild['guild_id'])
 
-    # for some reason these commands cause an error if you make the other commands in this cog global
-    # you dont need these commands so just keep them commented out
+    @cog_ext.cog_subcommand(
+        base="schedule",
+        name="options",
+        description="Change the schedule options for this server.",
+        options=[
+            manage_commands.create_option(
+                name="timezone",
+                description="Timezone the schedule will use. A full list can be found with /timezones.",
+                option_type=3,
+                required=False,
+            ),
+            manage_commands.create_option(
+                name="role",
+                description="Role that can manage the schedule. Set to @everyone to allow anyone to manage it.",
+                option_type=8,
+                required=False,
+            ),
+        ],
+    )
+    @commands.guild_only()
+    @commands.has_guild_permissions(manage_channels=True)
+    async def options(self, ctx: SlashContext, timezone: str = '', role: discord.Role = None):
+        changes = False
 
-    # # function for testing purposes
-    # @cog_ext.cog_subcommand(
-    #     base="schedule",
-    #     name="update",
-    #     guild_ids=guild_ids, # dont remove
-    # )
-    # @commands.guild_only()
-    # async def update(self, ctx: SlashContext):
-    #     await self.update_schedule(str(ctx.guild_id))
-    #     await ctx.send("Updated schedule!", hidden=True)
+        guild = await self.fetch_schedule(ctx)
+        if not guild:
+            await ctx.send("Schedule not found!", hidden=True)
+            return
 
-    # # function for testing purposes
-    # @cog_ext.cog_subcommand(
-    #     base="schedule",
-    #     name="check",
-    #     guild_ids=guild_ids, # dont remove
-    # )
-    # async def check_edit(self, ctx: SlashContext):
-    #     guild = await self.fetch_schedule(ctx)
-    #     if not guild:
-    #         await ctx.send("Schedule not found!", hidden=True)
-    #         return
-        
-    #     if not await self.can_edit_schedule(ctx, guild):
-    #         await ctx.send("You don't have permission to manage the schedule!", hidden=True)
-    #     else:
-    #         await ctx.send("Can manage the schedule!", hidden=True)
+        if not await self.can_edit_schedule(ctx, guild):
+            await ctx.send("You do not have permission to manage this schedule!", hidden=True)
+            return
+
+        db = self.bot.pg_con
+        new_timezone = guild['timezone']
+        new_role = guild['schedule_role_id']
+        options = ""
+
+        if timezone:
+            if not timezone in pytz.all_timezones:
+                await ctx.send("Invalid timezone! Please refer to /timezones for a list of valid timezones.", hidden=True)
+                return
+            new_timezone = timezone
+            changes = True
+            options += f"Timezone: `{guild['timezone']}` → `{new_timezone}`"
+        else:
+            options += f"Timezone: `{new_timezone}`" # new_timezone will be the same as the old if this gets called
+
+        def get_role_name(role):
+            role_name = discord.utils.get(ctx.guild.roles, id=int(role))
+            if role_name:
+                return role_name.name
+            else:
+                return "unknown role"
+
+        if role:
+            new_role = str(role.id)
+            changes = True
+            options += f"\nRole: `{get_role_name(guild['schedule_role_id'])}` → `{get_role_name(new_role)}`"
+        else:
+            options += f"\nRole: `{get_role_name(new_role)}`" # see above
+
+        if changes:
+            await db.execute(
+                "UPDATE guilds SET timezone = $2, schedule_role_id = $3 WHERE guild_id = $1",
+                guild['guild_id'], new_timezone, new_role
+            )
+            await ctx.send(content=f"**Options changed!**\n\n{options}", hidden=False)
+            await self.update_schedule(guild['guild_id'])
+        else:
+            await ctx.send(content=options, hidden=True)
 
 
 def setup(bot):

@@ -13,9 +13,6 @@ with open("bot.json", "r") as f:
     bot_data = json.load(f)
 
 
-guild_ids = [702716876601688114]
-
-
 # logging
 logging.basicConfig(level=logging.INFO)
 
@@ -41,11 +38,11 @@ help_command = commands.DefaultHelpCommand(
 
 bot = commands.Bot(
     activity = discord.Activity(type=discord.ActivityType.listening, name='slash commands'),
-    command_prefix = commands.when_mentioned_or('.'),
+    command_prefix = commands.when_mentioned,
     help_command = help_command,
     intents=intents,
 )
-slash = SlashCommand(bot, sync_commands=True, sync_on_cog_reload=True)
+slash = SlashCommand(bot, sync_commands=False, sync_on_cog_reload=False)
 
 async def create_db_pool():
     bot.pg_con = await asyncpg.create_pool(host=bot_data['address'], port=DB_PORT, database=bot_data['name'], user='postgres', password=bot_data['pass'])
@@ -55,82 +52,51 @@ async def on_ready():
     logging.info(f"We have logged in as {bot.user}")
 
 # cogs
-@slash.subcommand(
-    base = "cogs",
-    name = "list",
-    description = "Lists the bot's cogs.",
-    guild_ids = guild_ids,
+@bot.command(
+    name="cogs",
+    aliases=["cog"]
 )
 @commands.is_owner()
-async def list(ctx: SlashContext):
-    # loaded cogs
-    content = "Loaded cogs: "
-    for e in bot.extensions.keys():
-        content += str(e)[5:] + ", "
-    content = content[:-2] + "."
+async def cogs(ctx: commands.Context, *args):
+    if not args:
+        # loaded cogs
+        content = "Loaded cogs: "
+        for e in bot.extensions.keys():
+            content += str(e)[5:] + ", "
+        content = content[:-2] + "."
 
-    # all cogs
-    content += "\nAll cogs: "
-    for f in os.listdir("./cogs"):
-        if f == "__pycache__":
-            continue
-        content += f[:-3] + ", "
-    content = content[:-2] + "."
+        # all cogs
+        content += "\nAll cogs: "
+        for f in os.listdir("./cogs"):
+            if f == "__pycache__":
+                continue
+            content += f[:-3] + ", "
+        content = content[:-2] + "."
 
-    await ctx.send(content=content, hidden=True)
+        await ctx.send(content=content)
+    elif len(args) > 1:
+        if args[0] == "load":
+            bot.load_extension(f"cogs.{args[1]}")
+            await ctx.send(f"Successfully loaded {args[1]}. Make sure to use the `sync` command!")
+        elif args[0] == "unload":
+            bot.unload_extension(f"cogs.{args[1]}")
+            await ctx.send(f"Successfully unloaded {args[1]}. Make sure to use the `sync` command!")
+        elif args[0] == "reload":
+            bot.reload_extension(f"cogs.{args[1]}")
+            await ctx.send(f"Successfully reloaded {args[1]}. If any commands have been updated, make sure to use the `sync` command!")
+        else:
+            await ctx.send("Invalid usage!")
+    else:
+        await ctx.send("Invalid usage!")
 
-@slash.subcommand(
-    base = "cogs",
-    name = "reload",
-    description = "Reload a cog.",
-    options = [manage_commands.create_option(
-        name = "cog",
-        description = "A cog to reload.",
-        option_type = 3,
-        required = True,
-    )],
-    guild_ids = guild_ids,
+@bot.command(
+    name="sync"
 )
 @commands.is_owner()
-async def reload(ctx: SlashContext, cog: str):
-    bot.reload_extension(f"cogs.{cog}")
-    await ctx.send(f"Successfully reloaded {cog}.", hidden=True)
-
-@slash.subcommand(
-    base = "cogs",
-    name = "load",
-    description = "Load a cog.",
-    options = [manage_commands.create_option(
-        name = "cog",
-        description = "A cog to load.",
-        option_type = 3,
-        required = True,
-    )],
-    guild_ids = guild_ids,
-)
-@commands.is_owner()
-async def load(ctx: SlashContext, cog: str):
-    bot.load_extension(f"cogs.{cog}")
-    await slash.sync_all_commands()
-    await ctx.send(f"Successfully loaded {cog}.", hidden=True)
-
-@slash.subcommand(
-    base = "cogs",
-    name = "unload",
-    description = "Unload a cog.",
-    options = [manage_commands.create_option(
-        name = "cog",
-        description = "A cog to unload.",
-        option_type = 3,
-        required = True,
-    )],
-    guild_ids = guild_ids,
-)
-@commands.is_owner()
-async def unload(ctx: SlashContext, cog: str):
-    bot.unload_extension(f"cogs.{cog}")
-    await slash.sync_all_commands()
-    await ctx.send(f"Successfully unloaded {cog}.", hidden=True)
+async def sync(ctx: commands.Context):
+    await ctx.send("Syncing commands...")
+    await slash.sync_all_commands(delete_from_unused_guilds=True) #add delete_perms_from_unused_guilds if perms are ever used
+    await ctx.send("Completed syncing all commands!")
 
 # load cogs
 for file in os.listdir('./cogs'):

@@ -27,7 +27,9 @@ class Utility(commands.Cog):
                 await ctx.send(file=discord.File(file, "timezones.txt"))
         else:
             await ctx.send(content="Check your DM!", hidden=True)
-            channel = await ctx.author.create_dm()
+            channel = ctx.author.dm_channel
+            if not channel:
+                channel = await ctx.author.create_dm()
             with open("data/timezones.txt", "rb") as file:
                 await channel.send(file=discord.File(file, "timezones.txt"))
     
