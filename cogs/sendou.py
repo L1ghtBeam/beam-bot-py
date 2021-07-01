@@ -260,6 +260,11 @@ class Sendou(commands.Cog):
                             button_ctx.send("You cannot interact with this message.", hidden=True)
                         )
 
+    @builds.error
+    async def builds_error(self, ctx, error):
+        logging.exception("Builds error!", exc_info=error)
+        await ctx.send("An error occurred!")
+
 
 def setup(bot):
     bot.add_cog(Sendou(bot))
