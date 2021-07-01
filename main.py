@@ -14,18 +14,12 @@ with open("bot.json", "r") as f:
 
 
 # logging
-logging.basicConfig(level=logging.INFO)
-
 handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
 handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
 
-logger = logging.getLogger('discord')
+logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 logger.addHandler(handler)
-
-logger1 = logging.getLogger()
-logger1.setLevel(logging.INFO)
-logger1.addHandler(handler)
 
 # intents
 intents = discord.Intents.all()
@@ -50,6 +44,7 @@ async def create_db_pool():
 @bot.event
 async def on_ready():
     logging.info(f"We have logged in as {bot.user}")
+    print(f"We have logged in as {bot.user}")
 
 # cogs
 @bot.command(

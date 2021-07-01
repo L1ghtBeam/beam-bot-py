@@ -28,6 +28,13 @@ class Schedule(commands.Cog):
         await self.bot.wait_until_ready()
         logging.info("Starting schedule updater")
 
+    @update_all.error
+    async def error_update_all(self, error):
+        logging.exception("Schedule updater error!", exc_info=error)
+        logging.error("Attempting to restart schedule updater in 30 minutes.")
+        await asyncio.sleep(1800)
+        self.update_all.start()
+
     async def fetch_schedule(self, ctx: SlashContext):
         if not ctx.guild:
             # not in a guild
