@@ -1,9 +1,14 @@
+from asyncio.tasks import wait_for
 import discord
 from discord.ext import commands
 from discord_slash import cog_ext, SlashContext
-from discord_slash.utils import manage_commands
+from discord_slash.context import ComponentContext
+from discord_slash.utils.manage_commands import create_option
+from discord_slash.utils.manage_components import create_button, create_actionrow, wait_for_component
+from discord_slash.model import ButtonStyle
 
 import requests, json, logging, asyncio
+from datetime import datetime
 
 with open("data/abilities.json", 'r') as f:
     data = f.read()
@@ -19,49 +24,17 @@ class Sendou(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    def get_weapon_alias(self, weapon: str):
-        alias = (
-            ("Tentatek Splattershot", "Octo Shot Replica"),
-            ("Splattershot", "Hero Shot Replica"),
-            ("Blaster", "Hero Blaster Replica"),
-            ("Splat Roller", "Hero Roller Replica"),
-            ("Octobrush", "Herobrush Replica"),
-            ("Splat Charger", "Hero Charger Replica"),
-            ("Slosher", "Hero Slosher Replica"),
-            ("Heavy Splatling", "Hero Splatling Replica"),
-            ("Splat Dualies", "Hero Dualie Replicas"),
-            ("Splat Brella", "Hero Brella Replica")
-        )
-        for a in alias:
-            if weapon in a:
-                return a
-        return (weapon,)
-
-    def list_abilities(self, abilities):
-        out = ''
-        for i in range(len(abilities)):
-            a = abilitiesDict[abilities[i]]
-            if i == 0:
-                out += a + "   "
-            else:
-                out += a
-        out = out
-        return out
-
-    def build_not_found(self):
-        return "Builds not found! Make sure the weapon is spelled correctly with proper capitalization and/or the user has a sendou.ink account. Weapons must match **exactly** to how they are found in the game.\nExamples: `Splattershot Jr.`, `Neo Splash-o-matic`, `N-ZAP '85`."
-
     @cog_ext.cog_slash(
         name = "builds",
         description = "Gets builds for a specific weapon.",
         options = [
-            manage_commands.create_option(
+            create_option(
                 name = "weapon",
                 description = "A weapon from Splatoon 2. Use proper capitalization.",
                 option_type = 3,
                 required = False,
             ),
-            manage_commands.create_option(
+            create_option(
                 name = "user",
                 description = "A user to get builds from.",
                 option_type = 6,
@@ -69,11 +42,67 @@ class Sendou(commands.Cog):
             ),
         ],
     )
-    @commands.guild_only()
     async def builds(self, ctx: SlashContext, weapon: str = "", user: discord.User = None):
         if not weapon and not user:
             await ctx.send("Please include a weapon and/or a user.")
             return
+        await ctx.defer()
+
+        def build_not_found():
+            return "Builds not found! Make sure the weapon is spelled correctly with proper capitalization and/or the user has a sendou.ink account. Weapons must match **exactly** to how they are found in the game.\nExamples: `Splattershot Jr.`, `Neo Splash-o-matic`, `N-ZAP '85`."
+
+        def get_weapon_alias(weapon: str):
+            alias = (
+                ("Tentatek Splattershot", "Octo Shot Replica"),
+                ("Splattershot", "Hero Shot Replica"),
+                ("Blaster", "Hero Blaster Replica"),
+                ("Splat Roller", "Hero Roller Replica"),
+                ("Octobrush", "Herobrush Replica"),
+                ("Splat Charger", "Hero Charger Replica"),
+                ("Slosher", "Hero Slosher Replica"),
+                ("Heavy Splatling", "Hero Splatling Replica"),
+                ("Splat Dualies", "Hero Dualie Replicas"),
+                ("Splat Brella", "Hero Brella Replica")
+            )
+            for a in alias:
+                if weapon in a:
+                    return a
+            return (weapon,)
+
+        def list_abilities(abilities):
+            out = ''
+            for i in range(len(abilities)):
+                a = abilitiesDict[abilities[i]]
+                if i == 0:
+                    out += a + "   "
+                else:
+                    out += a
+            out = out
+            return out
+
+        def create_components(button1, button2, button3):
+                buttons = [
+                    create_button(
+                        style=ButtonStyle.gray,
+                        emoji="⏮️",
+                        disabled=button1,
+                        custom_id="first",
+                    ),
+                    create_button(
+                        style=ButtonStyle.grey,
+                        emoji="◀️",
+                        disabled=button2,
+                        custom_id="back",
+                    ),
+                    create_button(
+                        style=ButtonStyle.grey,
+                        emoji="▶️",
+                        disabled=button3,
+                        custom_id="forward",
+                    )
+                ]
+                action_row = create_actionrow(*buttons)
+                return [action_row]
 
         if user and type(user) in (discord.User, discord.Member):
             user_id = user.id
@@ -86,7 +115,7 @@ class Sendou(commands.Cog):
         else:
             colour = discord.Color.blue()
 
-        weapon = self.get_weapon_alias(weapon) if weapon else weapon
+        weapon = get_weapon_alias(weapon) if weapon else weapon
 
         if user:
             p = {'discordId': user_id}
@@ -100,7 +129,7 @@ class Sendou(commands.Cog):
                 d.extend(r.json())
 
         if not d:
-            await ctx.send(self.build_not_found())
+            await ctx.send(build_not_found())
             return
 
         d = sorted(d, key = lambda i: (i['top500'], i['updatedAt']), reverse=True)
@@ -114,11 +143,11 @@ class Sendou(commands.Cog):
             data = d
 
         if not data:
-            await ctx.send(self.build_not_found())
+            await ctx.send(build_not_found())
             return
 
-        message = await ctx.send("Getting builds...")
         index = 0
+        button_ctx = None
         while True:
             build = data[index]
 
@@ -130,7 +159,7 @@ class Sendou(commands.Cog):
 
             embed = discord.Embed(
                 colour = colour,
-                timestamp=ctx.message.created_at,
+                timestamp=datetime.utcnow(),
                 title=title,
                 description = f"Build {index + 1}/{len(data)}"
             )
@@ -150,9 +179,9 @@ class Sendou(commands.Cog):
 
             embed.add_field(name=name, value=value, inline=False)
 
-            value = self.list_abilities(build['headAbilities'])
-            value += "\n" + self.list_abilities(build['clothingAbilities'])
-            value += "\n" + self.list_abilities(build['shoesAbilities'])
+            value = list_abilities(build['headAbilities'])
+            value += "\n" + list_abilities(build['clothingAbilities'])
+            value += "\n" + list_abilities(build['shoesAbilities'])
 
             embed.add_field(name="Abilities:", value=value)
             
@@ -193,31 +222,43 @@ class Sendou(commands.Cog):
             embed.add_field(name="Ability Points:", value=value, inline=False)
 
             embed.set_footer(text="Powered by sendou.ink")
-            await message.edit(content=None, embed=embed)
 
-            for e in ["⏮️", "◀️", "▶️"]:
-                await message.add_reaction(e)
+            first_page = index == 0
+            last_page = index == len(data) - 1
 
-            def check(reaction: discord.Reaction, user: discord.User):
-                return user == ctx.author and (str(reaction.emoji) in ["⏮️", "◀️", "▶️"]) and reaction.message.id == message.id
+            components = create_components(first_page, first_page, last_page)
 
-            try:
-                reaction, react_user = await self.bot.wait_for('reaction_add', timeout=60.0, check=check)
-            except asyncio.TimeoutError:
-                await message.clear_reactions()
-                break
+            if button_ctx is None:
+                msg = await ctx.send(content=None, embed=embed, components=components)
             else:
-                reactionStr = str(reaction)
-                if reactionStr == "⏮️":
-                    index = 0
-                elif reactionStr == "◀️":
-                    index -= 1
-                elif reactionStr == "▶️":
-                    index += 1
+                await button_ctx.edit_origin(content=None, embed=embed, components=components)
 
-                index = max(index, 0)
-                index = min(index, len(data) - 1)
-                await reaction.remove(react_user)
+            # def check(button_ctx: ComponentContext):
+            #     return button_ctx.author_id == ctx.author_id
+
+            while True:
+                try:
+                    button_ctx = await wait_for_component(self.bot, messages=msg, timeout=60.0)
+                except asyncio.TimeoutError:
+                    components = create_components(True, True, True)
+                    await msg.edit(content=None, embed=embed, components=components)
+                    return
+                else:
+                    if button_ctx.author_id == ctx.author_id:
+                        if button_ctx.custom_id == "first":
+                            index = 0
+                        elif button_ctx.custom_id == "back":
+                            index -= 1
+                        elif button_ctx.custom_id == "forward":
+                            index += 1
+                        
+                        index = max(index, 0)
+                        index = min(index, len(data) - 1)
+                        break
+                    else:
+                        asyncio.create_task(
+                            button_ctx.send("You cannot interact with this message.", hidden=True)
+                        )
 
 
 def setup(bot):
