@@ -310,7 +310,7 @@ class Schedule(commands.Cog):
             timestamp = tz.localize(datetime(year, month, day, hour, minute))
 
             if timestamp < now:
-                timestamp = tz.localize(datetime(year, month, day, hour, minute))
+                timestamp = tz.localize(datetime(year + 1, month, day, hour, minute))
         except:
             await ctx.send("Invalid time!", hidden=True)
             return
