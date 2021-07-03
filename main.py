@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord_slash import SlashCommand, SlashContext
 from discord_slash.utils import manage_commands
 
-import logging, os, asyncpg, json
+import logging, os, asyncpg, json, asyncio
 
 
 DB_PORT = '5432'
@@ -52,45 +52,56 @@ async def on_ready():
     aliases=["cog"]
 )
 @commands.is_owner()
-async def cogs(ctx: commands.Context, *args):
-    if not args:
-        # loaded cogs
-        content = "Loaded cogs: "
-        for e in bot.extensions.keys():
-            content += str(e)[5:] + ", "
-        content = content[:-2] + "."
+async def cogs(ctx: commands.Context):
+    # loaded cogs
+    content = "Loaded cogs: "
+    for e in bot.extensions.keys():
+        content += str(e)[5:] + ", "
+    content = content[:-2] + "."
 
-        # all cogs
-        content += "\nAll cogs: "
-        for f in os.listdir("./cogs"):
-            if f == "__pycache__":
-                continue
-            content += f[:-3] + ", "
-        content = content[:-2] + "."
+    # all cogs
+    content += "\nAll cogs: "
+    for f in os.listdir("./cogs"):
+        if f == "__pycache__":
+            continue
+        content += f[:-3] + ", "
+    content = content[:-2] + "."
 
-        await ctx.send(content=content)
-    elif len(args) > 1:
-        if args[0] == "load":
-            bot.load_extension(f"cogs.{args[1]}")
-            await ctx.send(f"Successfully loaded {args[1]}. Make sure to use the `sync` command!")
-        elif args[0] == "unload":
-            bot.unload_extension(f"cogs.{args[1]}")
-            await ctx.send(f"Successfully unloaded {args[1]}. Make sure to use the `sync` command!")
-        elif args[0] == "reload":
-            bot.reload_extension(f"cogs.{args[1]}")
-            await ctx.send(f"Successfully reloaded {args[1]}. If any commands have been updated, make sure to use the `sync` command!")
-        else:
-            await ctx.send("Invalid usage!")
-    else:
-        await ctx.send("Invalid usage!")
+    await ctx.send(content=content)
+
+@bot.command(
+    name = "load",
+)
+@commands.is_owner()
+async def load(ctx: commands.Context, cog):
+    bot.load_extension(f"cogs.{cog}")
+    await ctx.send(f"Successfully loaded {cog}. Make sure to use the `sync` command!")
+
+@bot.command(
+    name = "unload",
+)
+@commands.is_owner()
+async def load(ctx: commands.Context, cog):
+    bot.unload_extension(f"cogs.{cog}")
+    await ctx.send(f"Successfully unloaded {cog}. Make sure to use the `sync` command!")
+
+@bot.command(
+    name = "reload",
+)
+@commands.is_owner()
+async def load(ctx: commands.Context, cog):
+    bot.reload_extension(f"cogs.{cog}")
+    await ctx.send(f"Successfully reloaded {cog}. If any commands have been updated, make sure to use the `sync` command!")
 
 @bot.command(
     name="sync"
 )
 @commands.is_owner()
 async def sync(ctx: commands.Context):
-    await ctx.send("Syncing commands...")
-    await slash.sync_all_commands(delete_from_unused_guilds=True) #add delete_perms_from_unused_guilds if perms are ever used
+    await asyncio.gather(
+        ctx.send("Syncing commands..."),
+        slash.sync_all_commands()
+    )
     await ctx.send("Completed syncing all commands!")
 
 # load cogs
