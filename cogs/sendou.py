@@ -7,7 +7,7 @@ from discord_slash.utils.manage_commands import create_option
 from discord_slash.utils.manage_components import create_button, create_actionrow, wait_for_component
 from discord_slash.model import ButtonStyle
 
-import requests, json, logging, asyncio
+import aiohttp, json, logging, asyncio
 from datetime import datetime
 
 with open("data/abilities.json", 'r') as f:
@@ -117,30 +117,31 @@ class Sendou(commands.Cog):
 
         weapon = get_weapon_alias(weapon) if weapon else weapon
 
-        if user:
-            p = {'discordId': user_id}
-            r = requests.get("https://sendou.ink/api/bot/builds", params=p)
-            d = r.json()
-        else:
-            d = []
-            for w in weapon:
-                p = {'weapon': w}
-                r = requests.get("https://sendou.ink/api/bot/builds", params=p)
-                d.extend(r.json())
+        async with aiohttp.ClientSession() as session:
+            if user:
+                params = {'discordId': user_id}
+                async with session.get("https://sendou.ink/api/bot/builds", params=params) as resp:
+                    raw_data = await resp.json()
+            else:
+                raw_data = []
+                for w in weapon:
+                    params = {'weapon': w}
+                    async with session.get("https://sendou.ink/api/bot/builds", params=params) as resp:
+                        raw_data.extend(await resp.json())
 
-        if not d:
+        if not raw_data:
             await ctx.send(build_not_found())
             return
 
-        d = sorted(d, key = lambda i: (i['top500'], i['updatedAt']), reverse=True)
+        raw_data = sorted(raw_data, key = lambda i: (i['top500'], i['updatedAt']), reverse=True)
 
         data = []
         if weapon and user:
-            for b in d:
-                if b['weapon'] in weapon:
-                    data.append(b)
+            for build in raw_data:
+                if build['weapon'] in weapon:
+                    data.append(build)
         else:
-            data = d
+            data = raw_data
 
         if not data:
             await ctx.send(build_not_found())
