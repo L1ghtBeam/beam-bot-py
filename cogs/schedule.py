@@ -86,7 +86,7 @@ class Schedule(commands.Cog):
             await db.execute("DELETE FROM guilds WHERE guild_id = $1", guild_id)
             return
         if not channel.permissions_for(channel.guild.me).send_messages:
-            # invalid permissions - can't send messages in channel
+            logging.warning(f"Invalid permissions! Cannot send message in channel \"{channel.name}\" of \"{channel.guild.name}\".")
             return
 
         message = discord.utils.get(await channel.history(limit=1).flatten(), author=channel.guild.me)
